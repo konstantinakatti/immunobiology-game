@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>The immune awakening</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f9f9f9; margin:0; padding:0;}
+    header { background:#004466; color:#fff; padding:1em; text-align:center; }
+    #game, #debrief, #help { display:none; padding:1em;}
+    .team { display:inline-block; vertical-align:top; margin:1em; }
+    .unit { border:1px solid #ccc; background:#fff; margin:0.5em; padding:0.5em;}
+    .hpbar { height:10px; background:#ddd; margin-top:0.3em;}
+    .hpfill { height:10px; background:green;}
+    #log { height:300px; overflow-y:scroll; border:1px solid #ccc; background:#fff; padding:0.5em;}
+    button { margin:0.2em;}
+    #menu { text-align:center; padding:2em;}
+    #menu button { font-size:1.2em; padding:0.5em 1em; }
+    #debrief { background:#eef; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>The immune awakening</h1>
+  </header>
+
+  <div id="menu">
+    <h2>You are the immune commander. A bacterial invasion has begun in the dermis...</h2>
+    <p>Choose your path:</p>
+    <button onclick="startGame()">Start Battle</button>
+    <button onclick="showHelp()">Help / Rules</button>
+  </div>
+
+  <div id="game">
+    <div class="team" id="immuneTeam"><h2>Immune Team</h2></div>
+    <div class="team" id="pathogenTeam"><h2>Pathogen Team (AI)</h2></div>
+    <div>
+      <h3>Actions</h3>
+      <label>Active Unit: <select id="activeUnit"></select></label>
+      <label>Target: <select id="targetUnit"></select></label><br>
+      <button onclick="attack()">⚔️ Attack</button>
+      <button onclick="special()">✨ Special</button>
+      <button onclick="role()">🧠 Role</button>
+      <button onclick="rollD6()">🎲 Roll d6</button>
+      <button onclick="nextAction()">▶ Next Action</button>
+    </div>
+    <div>
+      <h3>Battle Log</h3>
+      <div id="log"></div>
+    </div>
+  </div>
+
+  <div id="help">
+    <h2>Rules & How to Play</h2>
+    <p>- Each round has two phases: Immune (you) and Pathogen (AI).</p>
+    <p>- On your turn, select an <b>Active Unit</b> and a <b>Target</b>.</p>
+    <p>- Actions: Attack (damage), Special (unique ability), Role (supportive move).</p>
+    <p>- Use the <b>d6</b> (only values 1–6) when an action requires a dice roll.</p>
+    <p>- Tokens: <b>Marked</b> (+1 damage), <b>Frozen</b> (skip turn), <b>Antibody</b> (+1 dmg then consumed), <b>Boost</b> (-1 dmg then consumed), <b>Cyst</b> (immune for 1 turn).</p>
+    <button onclick="backToMenu()">Back to Menu</button>
+  </div>
+
+  <div id="debrief">
+    <h2>Mission Debrief – The immune awakening</h2>
+    <div id="results"></div>
+    <button onclick="backToMenu()">Back to Menu</button>
+  </div>
+
+  <script>
+    let units = [];
+    let round = 1;
+    let phase = "immune";
+    let logEl = document.getElementById("log");
+
+    function startGame(){
+      document.getElementById("menu").style.display="none";
+      document.getElementById("help").style.display="none";
+      document.getElementById("debrief").style.display="none";
+      document.getElementById("game").style.display="block";
+      initUnits();
+      updateUI();
+      log("Round 1 – Immune phase begins.");
+    }
+
+    function showHelp(){
+      document.getElementById("menu").style.display="none";
+      document.getElementById("help").style.display="block";
+    }
+    function backToMenu(){
+      document.getElementById("menu").style.display="block";
+      document.getElementById("game").style.display="none";
+      document.getElementById("help").style.display="none";
+      document.getElementById("debrief").style.display="none";
+    }
+
+    function initUnits(){
+      units = [
+        {name:"Phago", team:"immune", hp:12, maxhp:12, specials:0, alive:true},
+        {name:"Cytox", team:"immune", hp:10, maxhp:10, specials:0, alive:true},
+        {name:"T-Helia", team:"immune", hp:10, maxhp:10, specials:0, alive:true},
+        {name:"Bella", team:"immune", hp:10, maxhp:10, specials:0, alive:true},
+        {name:"Abby", team:"immune", hp:8, maxhp:8, specials:0, alive:true},
+        {name:"Compla", team:"immune", hp:10, maxhp:10, specials:0, alive:true},
+        {name:"Max", team:"immune", hp:9, maxhp:9, specials:0, alive:true},
+        {name:"Dendra", team:"immune", hp:8, maxhp:8, specials:0, alive:true},
+        {name:"Strepto", team:"pathogen", hp:10, maxhp:10, specials:0, alive:true},
+        {name:"Via", team:"pathogen", hp:8, maxhp:8, specials:0, alive:true},
+        {name:"Proto", team:"pathogen", hp:12, maxhp:12, specials:0, alive:true}
+      ];
+      round=1; phase="immune";
+    }
+
+    function updateUI(){
+      let immuneDiv=document.getElementById("immuneTeam");
+      let pathDiv=document.getElementById("pathogenTeam");
+      immuneDiv.innerHTML="<h2>Immune Team</h2>";
+      pathDiv.innerHTML="<h2>Pathogen Team (AI)</h2>";
+      let activeSel=document.getElementById("activeUnit");
+      let targetSel=document.getElementById("targetUnit");
+      activeSel.innerHTML=""; targetSel.innerHTML="";
+      units.forEach((u,i)=>{
+        if(!u.alive) return;
+        let bar=`<div class="hpbar"><div class="hpfill" style="width:${u.hp/u.maxhp*100}%"></div></div>`;
+        let div=`<div class="unit">${u.name} (HP:${u.hp}/${u.maxhp}) ${bar}</div>`;
+        if(u.team==="immune") immuneDiv.innerHTML+=div;
+        else pathDiv.innerHTML+=div;
+        let opt=document.createElement("option");
+        opt.value=i; opt.text=u.name;
+        if(u.team===phase) activeSel.appendChild(opt);
+        if(u.team!==phase) targetSel.appendChild(opt.cloneNode(true));
+      });
+    }
+
+    function log(msg){
+      logEl.innerHTML+="<div>"+msg+"</div>";
+      logEl.scrollTop=logEl.scrollHeight;
+    }
+
+    function attack(){
+      let a=document.getElementById("activeUnit").value;
+      let t=document.getElementById("targetUnit").value;
+      if(a===""||t==="")return;
+      let attacker=units[a], target=units[t];
+      if(!attacker.alive||!target.alive)return;
+      let dmg=roll(6);
+      target.hp-=dmg;
+      if(target.hp<=0){ target.alive=false; target.hp=0; log(attacker.name+" attacked "+target.name+" for "+dmg+" dmg. "+target.name+" is defeated!");}
+      else { log(attacker.name+" attacked "+target.name+" for "+dmg+" dmg.");}
+      updateUI(); checkGameOver();
+    }
+
+    function special(){
+      let a=document.getElementById("activeUnit").value;
+      if(a==="")return;
+      let attacker=units[a];
+      attacker.specials++;
+      log(attacker.name+" used a Special ability!");
+      updateUI();
+    }
+
+    function role(){
+      let a=document.getElementById("activeUnit").value;
+      if(a==="")return;
+      let attacker=units[a];
+      log(attacker.name+" performed a Role action.");
+      updateUI();
+    }
+
+    function rollD6(){
+      let r=roll(6);
+      log("Rolled d6: "+r);
+    }
+
+    function roll(max){ return Math.floor(Math.random()*max)+1; }
+
+    function nextAction(){
+      if(phase==="immune"){ phase="pathogen"; log("Now Pathogen phase begins."); aiTurn(); }
+      else { phase="immune"; round++; log("Round "+round+" – Immune phase begins.");}
+      updateUI();
+    }
+
+    function aiTurn(){
+      let enemies=units.filter(u=>u.alive&&u.team==="immune");
+      let attackers=units.filter(u=>u.alive&&u.team==="pathogen");
+      attackers.forEach(a=>{
+        if(enemies.length===0)return;
+        let target=enemies[Math.floor(Math.random()*enemies.length)];
+        let dmg=roll(6);
+        target.hp-=dmg;
+        if(target.hp<=0){ target.alive=false; target.hp=0; log(a.name+" struck "+target.name+" for "+dmg+". "+target.name+" is defeated!");}
+        else { log(a.name+" struck "+target.name+" for "+dmg+" dmg.");}
+      });
+      checkGameOver();
+    }
+
+    function checkGameOver(){
+      let immAlive=units.some(u=>u.alive&&u.team==="immune");
+      let pathAlive=units.some(u=>u.alive&&u.team==="pathogen");
+      if(!immAlive||!pathAlive){
+        endGame(immAlive && !pathAlive);
+      }
+    }
+
+    function endGame(playerWon){
+      document.getElementById("game").style.display="none";
+      document.getElementById("debrief").style.display="block";
+      let resultEl=document.getElementById("results");
+      let immSurvivors=units.filter(u=>u.alive&&u.team==="immune").length;
+      let totalImm=units.filter(u=>u.team==="immune").length;
+      let specialsUsed=units.filter(u=>u.team==="immune").reduce((s,u)=>s+u.specials,0);
+      let totalActions=round*units.filter(u=>u.team==="immune").length;
+      let percSpecial=Math.round((specialsUsed/totalActions)*100);
+      let html="<h3>"+(playerWon?"Victory!":"Defeat...")+"</h3>";
+      html+="<p>Rounds: "+round+"</p>";
+      html+="<p>Survivors: "+immSurvivors+"/"+totalImm+"</p>";
+      html+="<p>Specials used: "+specialsUsed+" ("+percSpecial+"% of turns)</p>";
+      if(percSpecial<30) html+="<p><b>Tip:</b> Try using Specials more often for synergy.</p>";
+      if(immSurvivors===totalImm) html+="<p><b>Tip:</b> Excellent defense! All units survived.</p>";
+      if(round<=3) html+="<p><b>Tip:</b> Fast victory – strong offense!</p>";
+      resultEl.innerHTML=html;
+    }
+  </script>
+</body>
+</html>
